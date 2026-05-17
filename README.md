@@ -1,49 +1,97 @@
-# Agentic Commerce for PrestaShop
+# agentic-commerce-for-prestashop
 
-Multi-protocol agentic-commerce layer for [PrestaShop](https://www.prestashop.com/). Speaks **[ACP](https://github.com/agentic-commerce-protocol/agentic-commerce-protocol)**, **[UCP](https://github.com/Universal-Commerce-Protocol/ucp)**, and **[AP2](https://github.com/google-agentic-commerce/AP2)** out of the box, emits real-standard discovery files (`/llms.txt`, schema.org JSON-LD, real-AI-crawler `robots.txt`), and settles through your existing PrestaShop payment module — cards, [Stripe MPP](https://mpp.dev), [x402](https://x402.org), stablecoins.
+**Multi-protocol agentic-commerce layer for [PrestaShop](https://www.prestashop.com/) 1.7+.** Speaks ACP, UCP, AP2; emits real-standard discovery files; signed-JWT cart-deeplinks; rail-agnostic.
 
-> Scaffold for the [`agentic-commerce-for-*`](https://github.com/xpaysh?q=agentic-commerce-for-) family. Full implementation lands in coming weeks alongside the [plugin template](https://github.com/xpaysh/agentic-commerce-plugin-template).
+Runs as a Node sidecar talking to PrestaShop over its Webservice REST API. Needs only an API key. Implements [`@xpaysh/adapter-contract`](https://www.npmjs.com/package/@xpaysh/adapter-contract) — same contract as the WooCommerce, commercetools, BigCommerce, Magento, and Saleor siblings.
 
-## What this gives a PrestaShop merchant
+> A native PrestaShop module (PHP, installable via Composer or back-office upload) is on the v0.3 roadmap. v0.1 ships as a Node sidecar so it can run on the same host as your storefront without touching the PrestaShop codebase.
 
-- **Agent-readable storefront** — your PrestaShop catalog (~7,600 active stores worldwide) gets exposed to ChatGPT, Claude, Gemini, and Perplexity via [llms.txt](https://llmstxt.org), schema.org JSON-LD on PDPs and category pages, and a `robots.txt` allowlist for real AI crawlers.
-- **Multi-protocol checkout endpoints** — ACP `POST /checkout_sessions` + `/delegate_payment` backed by PrestaShop's Cart + Order; UCP REST surface with [RFC 9421](https://datatracker.ietf.org/doc/rfc9421/) signed-request verification; AP2 mandate acceptance.
-- **No new processor.** Agents settle through your existing PrestaShop payment module (PrestaShop Checkout, Stripe, PayPal, Adyen, regional providers). Optional MPP / x402 / stablecoin rails are configurable.
-- **Cart deeplinks** — JWT-signed (commercial mode) or query-string (standalone) — pre-fill a PrestaShop cart and redirect the buyer to your existing checkout.
-- **Two-mode operation** — *standalone* (no xpay backend) or *commercial* (xpay backend adds catalog hosting, attribution, multi-region analytics).
+## What v0.1 ships
 
-## Distribution shape
+### Discovery
 
-PrestaShop modules are PHP packages installed via the back-office module manager or uploaded as zip. Distribution channels:
+| Path | Standard |
+|---|---|
+| `GET /llms.txt` | [llmstxt.org](https://llmstxt.org) |
+| `GET /.well-known/ucp` | UCP profile |
+| `GET /.well-known/oauth-protected-resource` | RFC 9728 (opt-in) |
+| `GET /.well-known/agent-card.json` | A2A 1.0 (opt-in) |
+| `GET /robots.txt` | RFC 9309 + AI-bot allowlist |
+| `GET /api/v1/jsonld/product/:id` | schema.org JSON-LD |
 
-- **PrestaShop Addons Marketplace** — submission once v1.0.0 lands
-- **Direct GitHub release** — zip download for self-hosted stores
+### Protocols
+
+- **UCP**: catalog search/lookup, cart CRUD, checkout, order lookup
+- **ACP**: `checkout_sessions` create / get / update / complete
+- **AP2**: structural mandate verification, mandate-bound checkout
+
+### Cart handoff
+
+`GET /cart/deeplink?token=<jwt>` redeems an HS256-signed JWT and lands the agent on the storefront's order-flow with a pre-filled cart.
+
+## Capabilities
 
 ```
-   AI Agent  ───►  PrestaShop store (with agentic-commerce module)  ───►  PrestaShop Webservice API
-                  (ACP / UCP / AP2 endpoints                              (Cart, Order, Product)
-                   exposed via /modules/agentic_commerce/*)
-                          │
-                          └──►  Merchant's existing payment module
-                                (Stripe, PayPal, PrestaShop Checkout, MPP, x402, …)
+cart                ✓
+checkout            ✓  (hands off to storefront payment module)
+catalogSearch       ✓
+catalogLookup       ✓
+order               ✓
+inventoryRealtime   ✓
+refunds             —  v0.3
+disputes            —  v0.3
+webhooks            —  v0.3 (PrestaShop hook subscriptions)
 ```
 
-PrestaShop is the strongest EU presence in the family; the long-tail of EU-regional payment modules (Mollie, Klarna, regional iDEAL/Bancontact variants) all keep working — the agentic layer doesn't touch settlement.
+## Quickstart (Docker)
 
-## Status
+```bash
+git clone https://github.com/xpaysh/agentic-commerce-for-prestashop.git
+cd agentic-commerce-for-prestashop
+cp .env.example .env
+# Fill in XPAY_MERCHANT_SLUG, SITE_URL, XPAY_API_KEY,
+# PRESTASHOP_BASE_URL, PRESTASHOP_API_KEY
 
-- 🚧 **Scaffold** — README + LICENSE only. PHP/Symfony ecosystem; closely shares engineering shape with the Magento and WooCommerce siblings.
-- Completely uncontested space — no existing `agentic-commerce-*` module on GitHub for PrestaShop today (as of 2026-05-16 survey).
-- Track progress and adjacent platforms in the [awesome-agentic-commerce](https://github.com/xpaysh/awesome-agentic-commerce) registry.
+docker compose -f examples/docker-compose.yml up --build
+```
 
-## See also
+## Manual run
 
-- [Plugin template](https://github.com/xpaysh/agentic-commerce-plugin-template) — shared TypeScript core
-- [awesome-agentic-commerce](https://github.com/xpaysh/awesome-agentic-commerce) — ecosystem registry
-- [Agentic Commerce for WooCommerce](https://github.com/xpaysh/agentic-commerce-for-woocommerce) · [Agentic Commerce for Magento](https://github.com/xpaysh/agentic-commerce-for-magento) — sibling PHP plugins
-- [ACP vs UCP vs AP2 — Technical Comparison](https://docs.xpay.sh/agentic-commerce-protocols/comparison)
-- [PrestaShop Dev Docs](https://devdocs.prestashop-project.org/) · [Addons Marketplace](https://addons.prestashop.com/)
+```bash
+npm install
+cp .env.example .env       # fill in
+npm run build
+node --env-file=.env dist/server.js
+```
+
+## Get a PrestaShop API key
+
+1. PrestaShop Back Office → **Advanced Parameters → Webservice**
+2. Confirm **Enable PrestaShop's webservice** is ON
+3. **Add new webservice key**:
+   - Key: auto-generate (32 chars)
+   - Key description: `xpay agentic commerce`
+   - Permissions: **GET** on `products`, `orders`, `customers`, `addresses`, `combinations`, `images`; **GET + POST + PUT** on `carts`
+4. Save → copy the **Key** into `PRESTASHOP_API_KEY`
+5. If multi-shop, set `PRESTASHOP_SHOP_ID` to the shop id. If multilingual, set `PRESTASHOP_LANGUAGE_ID` to your primary language id.
+
+## Multilang note
+
+PrestaShop returns multilingual fields as `{ language: [ { @attributes: { id: "1" }, @value: "..." } ] }`. The mapper picks the value for your configured `PRESTASHOP_LANGUAGE_ID` and falls back to the first non-empty value if absent — so multi-language stores work out of the box with sensible defaults.
+
+## Architecture
+
+This package is one of a family of `agentic-commerce-for-<platform>` repos under [xpaysh](https://github.com/xpaysh) that all implement the same `@xpaysh/adapter-contract`:
+
+- [agentic-commerce-for-woocommerce](https://github.com/xpaysh/agentic-commerce-for-woocommerce) — PHP-native reference
+- [agentic-commerce-for-commercetools](https://github.com/xpaysh/agentic-commerce-for-commercetools)
+- [agentic-commerce-for-bigcommerce](https://github.com/xpaysh/agentic-commerce-for-bigcommerce)
+- [agentic-commerce-for-magento](https://github.com/xpaysh/agentic-commerce-for-magento)
+- [agentic-commerce-for-saleor](https://github.com/xpaysh/agentic-commerce-for-saleor)
+- [agentic-commerce-for-prestashop](https://github.com/xpaysh/agentic-commerce-for-prestashop) — *this repo*
+
+Per-platform delta is ~3 files (`prestashop-client.ts`, `adapter.ts`, `mappers.ts`); every protocol route handler and discovery emitter is shared.
 
 ## License
 
-Apache-2.0.
+Apache-2.0
